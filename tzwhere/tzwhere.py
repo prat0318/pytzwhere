@@ -10,11 +10,11 @@ Run it with the -h option to see usage.
 """
 
 import csv
-import datetime
+import gzip
 try:
-    import json
-except ImportError:
     import simplejson as json
+except ImportError:
+    import json
 import math
 import os
 import pickle
@@ -39,8 +39,10 @@ class tzwhere(object):
                                   'tz_world.pickle')
     DEFAULT_CSV = os.path.join(os.path.dirname(__file__),
                                'tz_world.csv')
+    DEFAULT_CSV_GZ = os.path.join(os.path.dirname(__file__),
+                               'tz_world.csv.gz')
 
-    def __init__(self, input_kind='json', path=None):
+    def __init__(self, input_kind='csv_gz', path=None):
 
         # Construct appropriate generator for (tz, polygon) pairs.
         if input_kind in ['json', 'pickle']:
@@ -48,6 +50,8 @@ class tzwhere(object):
             pgen = tzwhere._feature_collection_polygons(featureCollection)
         elif input_kind == 'csv':
             pgen = tzwhere._read_polygons_from_csv(path)
+        elif input_kind == 'csv_gz':
+            pgen = tzwhere._read_polygons_from_csv_gz(path)
         else:
             raise ValueError(input_kind)
 
@@ -199,6 +203,19 @@ class tzwhere(object):
             for row in f:
                 row = row.split(',')
                 yield(row[0], [float(x) for x in row[1:]])
+
+    @staticmethod
+    def _read_polygons_from_csv_gz(path=None):
+        if path is None:
+            path = tzwhere.DEFAULT_CSV_GZ
+        print('Reading from CSV.GZ input file: %s' % path)
+        f = gzip.open(path, 'rb')
+        try:
+            for row in f:
+                row = row.split(',')
+                yield(row[0], [float(x) for x in row[1:]])
+        finally:
+            f.close()
 
     @staticmethod
     def write_csv(featureCollection, path=DEFAULT_CSV):

@@ -8,7 +8,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='tzwhere',
-    version='2.0',
+    version='2.1',
     packages=['tzwhere'],
     package_data={
         'tzwhere': ['tz_world.json', 'tz_world_compact.json',
@@ -28,5 +28,10 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
         'Topic :: Software Development :: Localization',
+    ],
+    install_requires=[
+        'simplejson >= 3.6.5',
+        'numpy >= 1.9.1',
+        'pytz >= 2011c',
     ],
 )
