@@ -18,6 +18,8 @@ except ImportError:
 import math
 import os
 import pickle
+import urllib2
+from contextlib import closing
 
 # We can save about 222MB of RAM by turning our polygon lists into
 # numpy arrays rather than tuples, if numpy is installed.
@@ -27,12 +29,16 @@ try:
 except ImportError:
     WRAP = tuple
 
+import pytz
+
 
 class tzwhere(object):
 
     SHORTCUT_DEGREES_LATITUDE = 1
     SHORTCUT_DEGREES_LONGITUDE = 1
     # By default, use the data file in our package directory
+    URL_PREFIX = ('https://raw.github.com/' +
+                  'prat0318/pytzwhere/archive/tzwhere')
     DEFAULT_JSON = os.path.join(os.path.dirname(__file__),
                                 'tz_world_compact.json')
     DEFAULT_PICKLE = os.path.join(os.path.dirname(__file__),
@@ -40,7 +46,7 @@ class tzwhere(object):
     DEFAULT_CSV = os.path.join(os.path.dirname(__file__),
                                'tz_world.csv')
     DEFAULT_CSV_GZ = os.path.join(os.path.dirname(__file__),
-                               'tz_world.csv.gz')
+                                  'tz_world.csv.gz')
 
     def __init__(self, input_kind='csv_gz', path=None):
 
@@ -60,6 +66,10 @@ class tzwhere(object):
 
         # Construct lookup shortcuts.
         self._construct_shortcuts()
+
+    def _get_download_link(self, filename):
+        """Constructs
+        """
 
     def _construct_polygon_map(self, polygon_generator):
         """Turn a (tz, polygon) generator, into our internal mapping."""
@@ -142,6 +152,15 @@ class tzwhere(object):
 
         return inside
 
+    def timezone_for_location(self, location):
+        """This additional API helps to get the timezone object directly
+
+        :param location: A dict containing keys - longitude, latitude
+        :return: Returns a datetime.tzinfo implementation for the given location
+        """
+        zone_str = self.tzNameAt(location['longitude'], location['latitude'])
+        return pytz.timezone(zone_str.encode('ascii', 'ignore'))
+
     def tzNameAt(self, latitude, longitude):
         latTzOptions = self.timezoneLatitudeShortcuts[
             (math.floor(latitude / self.SHORTCUT_DEGREES_LATITUDE)
@@ -171,11 +190,23 @@ class tzwhere(object):
         return reader(path)
 
     @staticmethod
+    def _open(filename, mode='r'):
+        if os.path.isfile(filename):
+            if os.path.splitext(filename)[1] == '.gz':
+                return closing(gzip.open(filename, mode))
+            else:
+                return open(filename, mode)
+        else:
+            filename = os.path.basename(filename)
+            f = urllib2.urlopen("{0}/{1}".format(tzwhere.URL_PREFIX, filename))
+            return closing(f)
+
+    @staticmethod
     def read_json(path=None):
         if path is None:
             path = tzwhere.DEFAULT_JSON
         print('Reading json input file: %s' % path)
-        with open(path, 'r') as f:
+        with tzwhere._open(path, 'r') as f:
             featureCollection = json.load(f)
         return featureCollection
 
@@ -184,7 +215,7 @@ class tzwhere(object):
         if path is None:
             path = tzwhere.DEFAULT_PICKLE
         print('Reading pickle input file: %s' % path)
-        with open(path, 'rb') as f:
+        with tzwhere._open(path, 'rb') as f:
             featureCollection = pickle.load(f)
         return featureCollection
 
@@ -199,7 +230,7 @@ class tzwhere(object):
         if path is None:
             path = tzwhere.DEFAULT_CSV
         print('Reading from CSV input file: %s' % path)
-        with open(path, 'r') as f:
+        with tzwhere._open(path, 'r') as f:
             for row in f:
                 row = row.split(',')
                 yield(row[0], [float(x) for x in row[1:]])
@@ -209,13 +240,10 @@ class tzwhere(object):
         if path is None:
             path = tzwhere.DEFAULT_CSV_GZ
         print('Reading from CSV.GZ input file: %s' % path)
-        f = gzip.open(path, 'rb')
-        try:
+        with tzwhere._open(path, 'rb') as f:
             for row in f:
                 row = row.split(',')
                 yield(row[0], [float(x) for x in row[1:]])
-        finally:
-            f.close()
 
     @staticmethod
     def write_csv(featureCollection, path=DEFAULT_CSV):
@@ -291,7 +319,27 @@ Options:
 })
 
 
-report_memory = False
+report_memory = True
+
+cache = None
+
+
+def get_tz(*args, **kwargs):
+    """Factory to get the tzwhere object.
+
+    ..note::
+        Constructing the tzwhere object takes aroound 7-8s. so it
+        is better to store the object and reuse it again. Cache
+        doesn't get invalidated if the params are different the next time.
+
+    """
+
+    global cache
+
+    if cache is None:
+        cache = tzwhere(*args, **kwargs)
+
+    return cache
 
 
 def main():
