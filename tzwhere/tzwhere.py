@@ -18,8 +18,9 @@ except ImportError:
 import math
 import os
 import pickle
-import urllib2
 from contextlib import closing
+
+from io import BytesIO
 
 # We can save about 222MB of RAM by turning our polygon lists into
 # numpy arrays rather than tuples, if numpy is installed.
@@ -30,6 +31,7 @@ except ImportError:
     WRAP = tuple
 
 import pytz
+import requests
 
 
 class tzwhere(object):
@@ -37,18 +39,17 @@ class tzwhere(object):
     SHORTCUT_DEGREES_LATITUDE = 1
     SHORTCUT_DEGREES_LONGITUDE = 1
     # By default, use the data file in our package directory
-    URL_PREFIX = ('https://raw.github.com/' +
+    URL_PREFIX = ('https://raw.githubusercontent.com/' +
                   'prat0318/pytzwhere/archive/tzwhere')
+    ZIPPED = '.gz'
     DEFAULT_JSON = os.path.join(os.path.dirname(__file__),
                                 'tz_world_compact.json')
     DEFAULT_PICKLE = os.path.join(os.path.dirname(__file__),
                                   'tz_world.pickle')
     DEFAULT_CSV = os.path.join(os.path.dirname(__file__),
                                'tz_world.csv')
-    DEFAULT_CSV_GZ = os.path.join(os.path.dirname(__file__),
-                                  'tz_world.csv.gz')
 
-    def __init__(self, input_kind='csv_gz', path=None):
+    def __init__(self, input_kind='csv', path=None):
 
         # Construct appropriate generator for (tz, polygon) pairs.
         if input_kind in ['json', 'pickle']:
@@ -191,15 +192,15 @@ class tzwhere(object):
 
     @staticmethod
     def _open(filename, mode='r'):
+        filename_zipped = filename + tzwhere.ZIPPED
         if os.path.isfile(filename):
-            if os.path.splitext(filename)[1] == '.gz':
-                return closing(gzip.open(filename, mode))
-            else:
-                return open(filename, mode)
+            return open(filename, mode)
+        elif os.path.isfile(filename_zipped):
+            return closing(gzip.open(filename_zipped, mode))
         else:
-            filename = os.path.basename(filename)
-            f = urllib2.urlopen("{0}/{1}".format(tzwhere.URL_PREFIX, filename))
-            return closing(f)
+            url = "{0}/{1}".format(tzwhere.URL_PREFIX, os.path.basename(filename_zipped))
+            content = requests.get(url).content
+            return closing(gzip.GzipFile(fileobj=BytesIO(content)))
 
     @staticmethod
     def read_json(path=None):
@@ -232,17 +233,7 @@ class tzwhere(object):
         print('Reading from CSV input file: %s' % path)
         with tzwhere._open(path, 'r') as f:
             for row in f:
-                row = row.split(',')
-                yield(row[0], [float(x) for x in row[1:]])
-
-    @staticmethod
-    def _read_polygons_from_csv_gz(path=None):
-        if path is None:
-            path = tzwhere.DEFAULT_CSV_GZ
-        print('Reading from CSV.GZ input file: %s' % path)
-        with tzwhere._open(path, 'rb') as f:
-            for row in f:
-                row = row.split(',')
+                row = row.decode('utf-8').split(',')
                 yield(row[0], [float(x) for x in row[1:]])
 
     @staticmethod

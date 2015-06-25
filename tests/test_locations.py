@@ -1,5 +1,6 @@
 import datetime
 import mock
+import requests
 import unittest
 from tzwhere import tzwhere
 
@@ -62,33 +63,31 @@ class LocationTestCase(unittest.TestCase):
     def test_json(self):
         self._test_tzwhere('json', path=None)
 
-    # Commenting it out, as it takes around a minute to run.
-    # def test_pickle(self):
-    #     self._test_tzwhere('pickle', path=None)
+    def test_pickle(self):
+        self._test_tzwhere('pickle', path=None)
 
-    def test_csv_gz(self):
-        self._test_tzwhere('csv_gz', path=None)
-
-    @mock.patch.object(tzwhere.tzwhere, '_read_polygons_from_csv_gz')
+    @mock.patch.object(tzwhere.tzwhere, '_read_polygons_from_csv')
     @mock.patch.object(tzwhere.tzwhere, '_construct_polygon_map')
     @mock.patch.object(tzwhere.tzwhere, '_construct_shortcuts')
-    def test_default_is_csv_gz(self, _, __, mock_read):
+    def test_default_is_csv(self, _, __, mock_read):
         tzwhere.tzwhere()
         mock_read.assert_called_once()
 
     @mock.patch('gzip.open')
-    def test_csv_gz_is_read_from_file(self, mock_gzip):
-        tzwhere.tzwhere._open(tzwhere.tzwhere.DEFAULT_CSV_GZ)
+    def test_csv_is_read_from_file(self, mock_gzip):
+        tzwhere.tzwhere._open(tzwhere.tzwhere.DEFAULT_CSV)
         mock_gzip.assert_called_once()
 
-    @mock.patch('urllib2.urlopen')
-    def test_non_defaults_are_fetched_from_cloud(self, mock_urllib):
-        tzwhere.tzwhere._open(tzwhere.tzwhere.DEFAULT_CSV)
-        mock_urllib.assert_called_once()
+    @mock.patch('requests.get')
+    @mock.patch('gzip.GzipFile')
+    def test_non_defaults_are_fetched_from_cloud(self, mock_gzip, mock_req):
+        mock_req.return_value = mock.Mock(spec=requests.Response, content=None)
+        tzwhere.tzwhere._open(tzwhere.tzwhere.DEFAULT_JSON)
+        mock_req.assert_called_once()
 
     @mock.patch('pytz.timezone')
     @mock.patch.object(tzwhere.tzwhere, 'tzNameAt')
-    @mock.patch.object(tzwhere.tzwhere, '_read_polygons_from_csv_gz')
+    @mock.patch.object(tzwhere.tzwhere, '_read_polygons_from_csv')
     @mock.patch.object(tzwhere.tzwhere, '_construct_polygon_map')
     @mock.patch.object(tzwhere.tzwhere, '_construct_shortcuts')
     def test_timezone_for_location(self, _, __, ___, mock_tzName, mock_pytz):
@@ -97,9 +96,9 @@ class LocationTestCase(unittest.TestCase):
         tz = tzwhere.tzwhere()
         assert 'bar' == tz.timezone_for_location({'longitude': 1, 'latitude': 2})
         mock_tzName.assert_called_once_with(1, 2)
-        mock_pytz.assert_called_once_with('foo')
+        mock_pytz.assert_called_once_with(b'foo')
 
-    @mock.patch.object(tzwhere.tzwhere, '_read_polygons_from_csv_gz')
+    @mock.patch.object(tzwhere.tzwhere, '_read_polygons_from_csv')
     @mock.patch.object(tzwhere.tzwhere, '_construct_polygon_map')
     @mock.patch.object(tzwhere.tzwhere, '_construct_shortcuts')
     def test_get_tz_caches_object(self, _, __, ___):
