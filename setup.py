@@ -33,5 +33,6 @@ setup(
         'simplejson >= 3.6.5',
         'numpy >= 1.9.1',
         'pytz >= 2011c',
+        'requests >= 2.7',
     ],
 )
